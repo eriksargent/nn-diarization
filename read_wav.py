@@ -19,7 +19,7 @@ def read_wav(filename, strideTms):      # strideTms is the stride in mili second
 
         chan1.append(avg1)
         chan2.append(avg2)
-  
+    return chan1, chan2             # returning channels that have been averaged  
 
     
     
