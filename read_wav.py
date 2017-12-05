@@ -1,17 +1,25 @@
 import scipy.io.wavfile as wavfile
 import numpy as np
 
-
+# modFunction is a list of functions that can be used to modify
+# the data and rate
 def read_wav(filename, time_delta=0.5, modFunctions=None):
     rate, data = wavfile.read(filename)
     if modFunctions is not None:
+        # apply each mod function
         for func in modFunctions:
+            # each mod function must have this signature
             newRate = func(rate, data)
             if newRate is not None:
+                # modify rate if changed in mod function
                 rate = newRate
     samplesPerPoint = int(rate * time_delta)
     padAmount = samplesPerPoint - (data.shape[0] % samplesPerPoint)
+    # setup result data padding with zero
     res = np.zeros((data.shape[0]+padAmount,data.shape[1]), dtype=data.dtype)
+    # set data in res (for padding)
+    res[:data.shape[0],:data.shape[1]] = data
+    # return each channel separately
     return res[:, 0].reshape(-1,samplesPerPoint), res[:, 1].reshape(-1,samplesPerPoint)
 
 
