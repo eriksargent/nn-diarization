@@ -25,7 +25,7 @@ stride_percent = 2
 input_width = training_X.shape[1]
 output_width = training_Y.shape[1]
 
-conv1_fmaps = 16
+conv1_fmaps = 32
 conv1_ksize = input_width // 100
 conv1_stride = conv1_ksize // stride_percent
 conv1_pad = "SAME"
@@ -40,7 +40,7 @@ pool3_size = conv2_ksize
 pool3_stride = conv2_stride
 pool3_fmaps = conv2_fmaps
 
-n_fc1 = 1024
+n_fc1 = 512
 n_fc2 = 128
 fc1_dropout_rate = 0.5
 
@@ -79,8 +79,8 @@ with tf.name_scope("pool3"):
     print('pool3 size {}'.format(pool3_size))
     print('reshape: {}'.format(pool3_fmaps * int(pool3.shape[1])))
     pool3_flat = tf.reshape(pool3, shape=[-1, pool3_fmaps * int(pool3.shape[1])])
-    # pool3_flat_drop = tf.layers.dropout(pool3_flat, conv2_dropout_rate,
-    #                                     training=training)
+    pool3_flat_drop = tf.layers.dropout(pool3_flat, conv2_dropout_rate,
+                                        training=training)
     # pool3 = tf.nn.max_pool(
     #     conv2, ksize=[1, conv2_ksize * stride_percent, 1, 1],
     #     strides=[1, 2, 1, 1], padding="VALID")
@@ -89,17 +89,17 @@ with tf.name_scope("pool3"):
     #                                     training=training)
 
 with tf.name_scope("fc1"):
-    fc1 = tf.layers.dense(pool3_flat, n_fc1, activation=tf.nn.relu,
+    fc1 = tf.layers.dense(pool3_flat_drop, n_fc1, activation=tf.nn.relu,
                           name="fc1")
-    # fc1_drop = tf.layers.dropout(fc1, fc1_dropout_rate, training=training)
+    fc1_drop = tf.layers.dropout(fc1, fc1_dropout_rate, training=training)
 
 with tf.name_scope("fc2"):
-    fc2 = tf.layers.dense(fc1, n_fc2, activation=tf.nn.relu,
+    fc2 = tf.layers.dense(fc1_drop, n_fc2, activation=tf.nn.relu,
                           name="fc2")
-    # fc2_drop = tf.layers.dropout(fc2, fc1_dropout_rate, training=training)
+    fc2_drop = tf.layers.dropout(fc2, fc1_dropout_rate, training=training)
 
 with tf.name_scope("output"):
-    logits = tf.layers.dense(fc2, output_width, activation=tf.sigmoid,
+    logits = tf.layers.dense(fc2_drop, output_width, activation=tf.sigmoid,
                              name="output")
     # Y_proba = tf.nn.softmax(logits, name="Y_proba")
 
@@ -163,7 +163,10 @@ checks_since_last_progress = 0
 max_checks_without_progress = 20
 best_model_params = None
 
-file_write = tf.summary.FileWriter(logdir,tf.get_default_graph())
+mse_summary = tf.summary.scalar('MSE', total_loss)
+accuracy_summary = tf.summary.scalar('Accuracy', accuracy)
+file_write = tf.summary.FileWriter(logdir, tf.get_default_graph())
+step = 0
 
 with tf.Session() as sess:
     init.run()
@@ -188,10 +191,9 @@ with tf.Session() as sess:
     print('loss_val {}'.format(loss_val))
     print('total_loss_val {}'.format(total_loss_val))
 
+    acc_val = accuracy.eval(feed_dict={X: testing_X, y: testing_Y})
+    print("pre-training testing accuracy: {:.4f}%".format(acc_val * 100))
     for epoch in range(n_epochs):
-        acc_val = accuracy.eval(feed_dict={X: testing_X,
-                                           y: testing_Y})
-        print("valid. accuracy: {:.4f}%".format(acc_val * 100))
 
         for iteration in range(num_train // batch_size):
             X_batch = training_X[(iteration * batch_size):((iteration + 1) * batch_size)]
@@ -201,6 +203,15 @@ with tf.Session() as sess:
             if iteration % check_interval == 0:
                 loss_val = total_loss.eval(feed_dict={X: testing_X,
                                                       y: testing_Y})
+
+                mse_summary_str = mse_summary.eval(
+                    feed_dict={X: testing_X, y: testing_Y})
+                accuracy_summary_str = accuracy_summary.eval(
+                    feed_dict={X: testing_X, y: testing_Y})
+                step += 1
+                file_write.add_summary(mse_summary_str, step)
+                file_write.add_summary(accuracy_summary_str, step)
+
                 if loss_val < best_loss_val:
                     best_loss_val = loss_val
                     checks_since_last_progress = 0
@@ -210,7 +221,7 @@ with tf.Session() as sess:
         acc_train = accuracy.eval(feed_dict={X: X_batch, y: y_batch})
         acc_val = accuracy.eval(feed_dict={X: testing_X,
                                            y: testing_Y})
-        print("Epoch {}, train accuracy: {:.4f}%, valid. accuracy: {:.4f}%, valid. best loss: {:.6f}".format(
+        print("Epoch {}: train accuracy: {:.4f}%\ntest accuracy: {:.4f}%\nbest loss: {:.6f}\n".format(
                   epoch, acc_train * 100, acc_val * 100, best_loss_val))
         if checks_since_last_progress > max_checks_without_progress:
             print("Early stopping!")
