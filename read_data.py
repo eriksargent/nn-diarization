@@ -12,7 +12,8 @@ if len(sys.argv) != 2:
 data_path = sys.argv[1]
 
 csv_path = os.path.join(data_path, 'CSV_Files_Final')
-wav_path = os.path.join(data_path, 'Sound Files')
+# wav_path = os.path.join(data_path, 'Sound Files')
+wav_path = os.path.join(data_path, 'Downsampled')
 
 speaker_datas = []
 sound_datas = []
@@ -35,6 +36,7 @@ for file in sorted(os.listdir(wav_dir)):
     filename = os.fsdecode(file)
     file_path = os.path.join(wav_path, filename)
     sound_datas.append(read_wav(file_path))
+    print('Imported: {}'.format(filename))
 
 # Flatten into an array of (time segments x samples)
 # These indexes will directly match the speakers
@@ -47,7 +49,7 @@ assert(sounds.shape[0] == speakers.shape[0])
 num_samples = sounds.shape[0]
 
 # Get some random indicies to partition the data into training and testing sets
-training_size = int(0.8 * num_samples)
+training_size = int(0.9 * num_samples)
 shuffle_indicies = np.random.permutation(num_samples)
 training_idx = shuffle_indicies[:training_size]
 testing_idx = shuffle_indicies[training_size:]
