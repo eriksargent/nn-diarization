@@ -25,22 +25,26 @@ stride_percent = 2
 input_width = training_X.shape[1]
 output_width = training_Y.shape[1]
 
-conv1_fmaps = 8
-conv1_ksize = input_width // 10
+conv1_fmaps = 16
+conv1_ksize = input_width // 100
 conv1_stride = conv1_ksize // stride_percent
 conv1_pad = "SAME"
 
-conv2_fmaps = 16
-conv2_ksize = conv1_ksize // 5
+conv2_fmaps = 32
+conv2_ksize = 5
 conv2_stride = conv2_ksize // stride_percent
 conv2_pad = "SAME"
 conv2_dropout_rate = 0.25
 
-pool3_size = conv2_ksize // stride_percent
+pool3_size = conv2_ksize
+pool3_stride = conv2_stride
 pool3_fmaps = conv2_fmaps
 
-n_fc1 = 128
+n_fc1 = 1024
+n_fc2 = 128
 fc1_dropout_rate = 0.5
+
+learning_rate = 0.01
 
 
 def reset_graph(seed=42):
@@ -62,16 +66,21 @@ conv1 = tf.layers.conv1d(X_reshaped, filters=conv1_fmaps,
                          kernel_size=conv1_ksize,
                          strides=conv1_stride, padding=conv1_pad,
                          activation=tf.nn.relu, name="conv1")
-# conv2 = tf.layers.conv1d(conv1, filters=conv2_fmaps, kernel_size=conv2_ksize,
-#                          strides=conv2_stride, padding=conv2_pad,
-#                          activation=tf.nn.relu, name="conv2")
+conv2 = tf.layers.conv1d(conv1, filters=conv2_fmaps, kernel_size=conv2_ksize,
+                         strides=conv2_stride, padding=conv2_pad,
+                         activation=tf.nn.relu, name="conv2")
 
 
 with tf.name_scope("pool3"):
-    pool3 = tf.layers.max_pooling1d(inputs=conv1, pool_size=21,
-                                    strides=1, padding="VALID")
-    pool3_flat_drop = tf.layers.dropout(pool3, conv2_dropout_rate,
-                                        training=training)
+    pool3 = tf.layers.max_pooling1d(inputs=conv2, pool_size=pool3_size,
+                                    strides=pool3_stride, padding="VALID")
+    print('pool 3 shape')
+    print(pool3.shape[1])
+    print('pool3 size {}'.format(pool3_size))
+    print('reshape: {}'.format(pool3_fmaps * int(pool3.shape[1])))
+    pool3_flat = tf.reshape(pool3, shape=[-1, pool3_fmaps * int(pool3.shape[1])])
+    # pool3_flat_drop = tf.layers.dropout(pool3_flat, conv2_dropout_rate,
+    #                                     training=training)
     # pool3 = tf.nn.max_pool(
     #     conv2, ksize=[1, conv2_ksize * stride_percent, 1, 1],
     #     strides=[1, 2, 1, 1], padding="VALID")
@@ -80,27 +89,36 @@ with tf.name_scope("pool3"):
     #                                     training=training)
 
 with tf.name_scope("fc1"):
-    fc1 = tf.layers.dense(pool3_flat_drop, n_fc1, activation=tf.nn.relu,
+    fc1 = tf.layers.dense(pool3_flat, n_fc1, activation=tf.nn.relu,
                           name="fc1")
-    fc1_drop = tf.layers.dropout(fc1, fc1_dropout_rate, training=training)
+    # fc1_drop = tf.layers.dropout(fc1, fc1_dropout_rate, training=training)
+
+with tf.name_scope("fc2"):
+    fc2 = tf.layers.dense(fc1, n_fc2, activation=tf.nn.relu,
+                          name="fc2")
+    # fc2_drop = tf.layers.dropout(fc2, fc1_dropout_rate, training=training)
 
 with tf.name_scope("output"):
-    logits = tf.layers.dense(fc1, output_width, name="output")
+    logits = tf.layers.dense(fc2, output_width, activation=tf.sigmoid,
+                             name="output")
     # Y_proba = tf.nn.softmax(logits, name="Y_proba")
+
 
 with tf.name_scope("train"):
     # xentropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits,
     #                                                           labels=y)
 
-    xentropy = tf.squared_difference(logits, y)
-    loss = tf.reduce_mean(xentropy)
+    loss = tf.squared_difference(logits, y)
+    total_loss = tf.reduce_mean(loss)
     optimizer = tf.train.AdamOptimizer()
-    training_op = optimizer.minimize(loss)
+    # optimizer = tf.train.GradientDescentOptimizer(learning_rate)
+    # optimizer = tf.train.MomentumOptimizer(learning_rate, 0.8)
+    training_op = optimizer.minimize(total_loss)
 
 with tf.name_scope("eval"):
-    correct = (tf.round(logits) + y) / 2
-    # correct = tf.nn.in_top_k(tf.cast(tf.round(logits), tf.int64), tf.cast(y, tf.int64), 1)
-    accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
+    rounded = tf.round(logits)
+    correct = tf.abs(rounded - y)
+    accuracy = 1 - tf.reduce_mean(correct)
 
 with tf.name_scope("init_and_save"):
     init = tf.global_variables_initializer()
@@ -149,15 +167,40 @@ file_write = tf.summary.FileWriter(logdir,tf.get_default_graph())
 
 with tf.Session() as sess:
     init.run()
+
+    conv1_val = conv1.eval(feed_dict={X: [testing_X[0]], y: [testing_Y[0]]}).shape
+    pool3_val = pool3.eval(feed_dict={X: [testing_X[0]], y: [testing_Y[0]]}).shape
+
+    acc_val = accuracy.eval(feed_dict={X: [testing_X[0]], y: [testing_Y[0]]})
+    rounded_val = rounded.eval(feed_dict={X: [testing_X[0]], y: [testing_Y[0]]})
+    correct_val = correct.eval(feed_dict={X: [testing_X[0]], y: [testing_Y[0]]})
+    logits_val = logits.eval(feed_dict={X: [testing_X[0]], y: [testing_Y[0]]}).shape
+    loss_val = loss.eval(feed_dict={X: [testing_X[0]], y: [testing_Y[0]]})
+    total_loss_val = total_loss.eval(feed_dict={X: [testing_X[0]], y: [testing_Y[0]]})
+    
+    print('conv1_val {}'.format(conv1_val))
+    print('pool3_val {}'.format(pool3_val))
+    print('acc_val {}'.format(acc_val))
+    print('rounded_val {}'.format(rounded_val))
+    print('correct_val {}'.format(correct_val))
+    print('testing_Y {}'.format(testing_Y)[0])
+    print('logits_val {}'.format(logits_val))
+    print('loss_val {}'.format(loss_val))
+    print('total_loss_val {}'.format(total_loss_val))
+
     for epoch in range(n_epochs):
+        acc_val = accuracy.eval(feed_dict={X: testing_X,
+                                           y: testing_Y})
+        print("valid. accuracy: {:.4f}%".format(acc_val * 100))
+
         for iteration in range(num_train // batch_size):
             X_batch = training_X[(iteration * batch_size):((iteration + 1) * batch_size)]
             y_batch = training_Y[(iteration * batch_size):((iteration + 1) * batch_size)]
             sess.run(training_op,
                      feed_dict={X: X_batch, y: y_batch, training: True})
             if iteration % check_interval == 0:
-                loss_val = loss.eval(feed_dict={X: testing_X,
-                                                y: testing_Y})
+                loss_val = total_loss.eval(feed_dict={X: testing_X,
+                                                      y: testing_Y})
                 if loss_val < best_loss_val:
                     best_loss_val = loss_val
                     checks_since_last_progress = 0

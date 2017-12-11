@@ -40,7 +40,7 @@ for file in sorted(os.listdir(wav_dir)):
 
 # Flatten into an array of (time segments x samples)
 # These indexes will directly match the speakers
-sounds = np.concatenate(np.array(sound_datas).reshape([-1]))
+sounds = np.concatenate(np.array(sound_datas).reshape([-1])) / 32768
 # And try to clean up some memory because this is a lot of data...
 del sound_datas
 
