@@ -28,6 +28,9 @@ def read_csv(filename, time_step=0.05, time_delta=0.5):
                 active_index += 1
             if active_index >= len(input_data['text']):
                 continue
-            speaker_data[i, j] = input_data['text'][active_index]
+            try:
+                speaker_data[i, j] = input_data['text'][active_index]
+            except ValueError:
+                print("Bad data in CSV file: {}".format(filename))
 
     return speaker_data
