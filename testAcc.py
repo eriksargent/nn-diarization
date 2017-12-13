@@ -31,8 +31,8 @@ model_path = os.path.join(os.path.dirname(
 wav_dir_path = sys.argv[1]
 csv_dir_path = sys.argv[2]
 
-allCNNOutput = []
-allExpectedOutput = []
+allCNNOutput = np.array([])
+allExpectedOutput = np.array([])
 
 with tf.Session() as sess:
     saver = tf.train.import_meta_graph(os.path.join(model_path, 'model.meta'))
@@ -49,26 +49,34 @@ with tf.Session() as sess:
         ch1 = ch1 / 32768
         ch2 = ch2 / 32768
         cnn_out_ch1 = sess.run(
-            'eval/rounded:0', feed_dict={'inputs/X:0': ch1}).reshape([-1])
+            'eval/rounded:0', feed_dict={'inputs/X:0': ch1})
         cnn_out_ch2 = sess.run(
-            'eval/rounded:0', feed_dict={'inputs/X:0': ch2}).reshape([-1])
-        allCNNOutput.append(cnn_out_ch1)
-        allCNNOutput.append(cnn_out_ch2)
+            'eval/rounded:0', feed_dict={'inputs/X:0': ch2})
+        if len(allCNNOutput) == 0:
+            allCNNOutput = cnn_out_ch1
+            allCNNOutput = np.append(allCNNOutput, cnn_out_ch2, axis=0)
+        else:
+            allCNNOutput = np.append(allCNNOutput, cnn_out_ch1, axis=0)
+            allCNNOutput = np.append(allCNNOutput, cnn_out_ch2, axis=0)
 
 csv_dir_enc = os.fsencode(csv_dir_path)
 for file in sorted(os.listdir(csv_dir_enc)):
     filename = os.fsdecode(file)
     if not filename.endswith('.csv'):
         continue
+    print(filename)
     expData = read_csv(os.path.join(csv_dir_path, filename))
-    allExpectedOutput.append(expData)
+    if len(allExpectedOutput) == 0:
+        allExpectedOutput = expData
+    else:
+        allExpectedOutput = np.append(allExpectedOutput, expData, axis=0)
 
-outBeforeProc = np.array(allCNNOutput).reshape([-1])
+outBeforeProc = allCNNOutput.copy().reshape([-1])
 for i in range(len(allCNNOutput)):
     eliminateLessThanChunks(allCNNOutput[i], 0, 9)
     eliminateLessThanChunks(allCNNOutput[i], 1, 5)
-outAfterProc = np.array(allCNNOutput).reshape([-1])
-expOut = np.array(allExpectedOutput).reshape([-1])
+outAfterProc = allCNNOutput.reshape([-1])
+expOut = allExpectedOutput.reshape([-1])
 
 print(outBeforeProc.shape)
 print(outAfterProc.shape)
@@ -86,5 +94,6 @@ for i in range(n):
     if outAfterProc[i] == expOut[i]:
         numCorrectAfterProc += 1
 
-print('Accuracy Before Processing: {}'.format(numCorrectBeforeProc/n*100))
-print('Accuracy After Processing: {}'.format(numCorrectAfterProc/n*100))
+print('Accuracy Before Processing: {:.4f}'.format(numCorrectBeforeProc/n*100))
+print('Accuracy After Processing: {:.4f}'.format(numCorrectAfterProc/n*100))
+print(np.array_equal(outBeforeProc, outAfterProc))
