@@ -57,6 +57,7 @@ fc4_dropout_rate = 0.25
 
 learning_rate = 0.01
 
+
 def reset_graph(seed=42):
     tf.reset_default_graph()
     tf.set_random_seed(seed)
@@ -87,27 +88,28 @@ conv3 = tf.layers.conv1d(conv2, filters=conv3_fmaps, kernel_size=conv3_ksize,
 with tf.name_scope("pool3"):
     pool3 = tf.layers.max_pooling1d(inputs=conv3, pool_size=pool3_size,
                                     strides=pool3_stride, padding="VALID")
-    pool3_flat = tf.reshape(pool3, shape=[-1, pool3_fmaps * int(pool3.shape[1])])
+    pool3_flat = tf.reshape(
+        pool3, shape=[-1, pool3_fmaps * int(pool3.shape[1])])
     pool3_flat_drop = tf.layers.dropout(pool3_flat, conv2_dropout_rate,
                                         training=training)
 
 with tf.name_scope("fc1"):
-    fc1 = tf.layers.dense(pool3_flat_drop, n_fc1, activation=tf.nn.relu,
+    fc1 = tf.layers.dense(pool3_flat_drop, n_fc1, activation=tf.sigmoid,
                           name="fc1")
     fc1_drop = tf.layers.dropout(fc1, fc1_dropout_rate, training=training)
 
 with tf.name_scope("fc2"):
-    fc2 = tf.layers.dense(fc1_drop, n_fc2, activation=tf.nn.relu,
+    fc2 = tf.layers.dense(fc1_drop, n_fc2, activation=tf.sigmoid,
                           name="fc2")
     fc2_drop = tf.layers.dropout(fc2, fc2_dropout_rate, training=training)
 
 with tf.name_scope("fc3"):
-    fc3 = tf.layers.dense(fc2_drop, n_fc3, activation=tf.nn.relu,
+    fc3 = tf.layers.dense(fc2_drop, n_fc3, activation=tf.sigmoid,
                           name="fc3")
     fc3_drop = tf.layers.dropout(fc3, fc3_dropout_rate, training=training)
 
 with tf.name_scope("fc4"):
-    fc4 = tf.layers.dense(fc3_drop, n_fc4, activation=tf.nn.relu,
+    fc4 = tf.layers.dense(fc3_drop, n_fc4, activation=tf.sigmoid,
                           name="fc4")
     fc4_drop = tf.layers.dropout(fc4, fc4_dropout_rate, training=training)
 
@@ -131,12 +133,6 @@ with tf.name_scope("init_and_save"):
     saver = tf.train.Saver()
 
 
-# The get_model_params() function gets the model's state (i.e., the value
-# of all the variables), and the restore_model_params() restores a previous
-# state. This is used to speed up early stopping: instead of storing the
-# best model found so far to disk, we just save it to memory.
-# At the end of training, we roll back to the best model found.
-
 def get_model_params():
     gvars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
     return {gvar.op.name: value for gvar, value in zip(gvars, tf.get_default_session().run(gvars))}
@@ -146,22 +142,15 @@ def restore_model_params(model_params):
     gvar_names = list(model_params.keys())
     assign_ops = {gvar_name: tf.get_default_graph().get_operation_by_name(gvar_name + "/Assign")
                   for gvar_name in gvar_names}
-    init_values = {gvar_name: assign_op.inputs[1] for gvar_name, assign_op in assign_ops.items()}
-    feed_dict = {init_values[gvar_name]: model_params[gvar_name] for gvar_name in gvar_names}
+    init_values = {gvar_name: assign_op.inputs[1]
+                   for gvar_name, assign_op in assign_ops.items()}
+    feed_dict = {init_values[gvar_name]: model_params[gvar_name]
+                 for gvar_name in gvar_names}
     tf.get_default_session().run(assign_ops, feed_dict=feed_dict)
 
 
-#  This implementation of Early Stopping works like this:
-#   - every 100 training iterations, it evaluates the model on
-#       the validation set,
-#   - if the model performs better than the best model found so far,
-#      then it saves the model to RAM,
-#   - if there is no progress for 100 evaluations in a row,
-#      then training is interrupted,
-#   - after training, the code restores the best model found.
-
 n_epochs = 50
-batch_size = 30
+batch_size = 50
 
 best_loss_val = np.inf
 check_interval = 500
@@ -177,25 +166,13 @@ step = 0
 with tf.Session() as sess:
     init.run()
 
-    conv1_val = conv1.eval(feed_dict={X: [testing_X[0]], y: [testing_Y[0]]}).shape
-    conv2_val = conv2.eval(feed_dict={X: [testing_X[0]], y: [testing_Y[0]]}).shape
-    conv3_val = conv3.eval(feed_dict={X: [testing_X[0]], y: [testing_Y[0]]}).shape
-    pool3_val = pool3_flat.eval(feed_dict={X: [testing_X[0]], y: [testing_Y[0]]}).shape
-
-    acc_val = accuracy.eval(feed_dict={X: [testing_X[0]], y: [testing_Y[0]]})
-    rounded_val = rounded.eval(feed_dict={X: [testing_X[0]], y: [testing_Y[0]]})
-    correct_val = correct.eval(feed_dict={X: [testing_X[0]], y: [testing_Y[0]]})
-    logits_val = logits.eval(feed_dict={X: [testing_X[0]], y: [testing_Y[0]]}).shape
-    loss_val = loss.eval(feed_dict={X: [testing_X[0]], y: [testing_Y[0]]})
-    total_loss_val = total_loss.eval(feed_dict={X: [testing_X[0]], y: [testing_Y[0]]})
-
     acc_val = accuracy.eval(feed_dict={X: testing_X, y: testing_Y})
     print("pre-training testing accuracy: {:.4f}%".format(acc_val * 100))
     for epoch in range(n_epochs):
 
         for iteration in range(num_train // batch_size):
-            X_batch = training_X[(iteration * batch_size):((iteration + 1) * batch_size)]
-            y_batch = training_Y[(iteration * batch_size):((iteration + 1) * batch_size)]
+            X_batch = training_X[(iteration * batch_size)                                 :((iteration + 1) * batch_size)]
+            y_batch = training_Y[(iteration * batch_size)                                 :((iteration + 1) * batch_size)]
             sess.run(training_op,
                      feed_dict={X: X_batch, y: y_batch, training: True})
             if iteration % check_interval == 0:
@@ -220,7 +197,7 @@ with tf.Session() as sess:
         acc_val = accuracy.eval(feed_dict={X: testing_X,
                                            y: testing_Y})
         print("Epoch {}: train accuracy: {:.4f}%\ntest accuracy: {:.4f}%\nbest loss: {:.6f}\n".format(
-                  epoch, acc_train * 100, acc_val * 100, best_loss_val))
+            epoch, acc_train * 100, acc_val * 100, best_loss_val))
         if checks_since_last_progress > max_checks_without_progress:
             print("Early stopping!")
             break
