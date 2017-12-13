@@ -36,9 +36,9 @@ conv2_stride = conv2_ksize // stride_percent
 conv2_pad = "SAME"
 conv2_dropout_rate = 0.25
 
-pool3_size = conv2_ksize
-pool3_stride = conv2_stride
-pool3_fmaps = conv2_fmaps
+pool_size = conv2_ksize
+pool_stride = conv2_stride
+pool_fmaps = conv2_fmaps
 
 n_fc1 = 512
 n_fc2 = 128
@@ -71,30 +71,24 @@ conv2 = tf.layers.conv1d(conv1, filters=conv2_fmaps, kernel_size=conv2_ksize,
                          activation=tf.nn.relu, name="conv2")
 
 
-with tf.name_scope("pool3"):
-    pool3 = tf.layers.max_pooling1d(inputs=conv2, pool_size=pool3_size,
-                                    strides=pool3_stride, padding="VALID")
-    print('pool 3 shape')
-    print(pool3.shape[1])
-    print('pool3 size {}'.format(pool3_size))
-    print('reshape: {}'.format(pool3_fmaps * int(pool3.shape[1])))
-    pool3_flat = tf.reshape(pool3, shape=[-1, pool3_fmaps * int(pool3.shape[1])])
-    pool3_flat_drop = tf.layers.dropout(pool3_flat, conv2_dropout_rate,
+with tf.name_scope("pool"):
+    pool = tf.layers.max_pooling1d(inputs=conv2, pool_size=pool_size,
+                                    strides=pool_stride, padding="VALID")
+    print('pool shape')
+    print(pool.shape[1])
+    print('pool size {}'.format(pool_size))
+    print('reshape: {}'.format(pool_fmaps * int(pool.shape[1])))
+    pool_flat = tf.reshape(pool, shape=[-1, pool_fmaps * int(pool.shape[1])])
+    pool_flat_drop = tf.layers.dropout(pool_flat, conv2_dropout_rate,
                                         training=training)
-    # pool3 = tf.nn.max_pool(
-    #     conv2, ksize=[1, conv2_ksize * stride_percent, 1, 1],
-    #     strides=[1, 2, 1, 1], padding="VALID")
-    # pool3_flat = tf.reshape(pool3, shape=[-1, pool3_fmaps * 14 * 14])
-    # pool3_flat_drop = tf.layers.dropout(pool3_flat, conv2_dropout_rate,
-    #                                     training=training)
 
 with tf.name_scope("fc1"):
-    fc1 = tf.layers.dense(pool3_flat_drop, n_fc1, activation=tf.nn.relu,
+    fc1 = tf.layers.dense(pool_flat_drop, n_fc1, activation=tf.sigmoid,
                           name="fc1")
     fc1_drop = tf.layers.dropout(fc1, fc1_dropout_rate, training=training)
 
 with tf.name_scope("fc2"):
-    fc2 = tf.layers.dense(fc1_drop, n_fc2, activation=tf.nn.relu,
+    fc2 = tf.layers.dense(fc1_drop, n_fc2, activation=tf.sigmoid,
                           name="fc2")
     fc2_drop = tf.layers.dropout(fc2, fc1_dropout_rate, training=training)
 
@@ -116,7 +110,7 @@ with tf.name_scope("train"):
     training_op = optimizer.minimize(total_loss)
 
 with tf.name_scope("eval"):
-    rounded = tf.round(logits)
+    rounded = tf.round(logits, name="rounded")
     correct = tf.abs(rounded - y)
     accuracy = 1 - tf.reduce_mean(correct)
 
@@ -172,7 +166,7 @@ with tf.Session() as sess:
     init.run()
 
     conv1_val = conv1.eval(feed_dict={X: [testing_X[0]], y: [testing_Y[0]]}).shape
-    pool3_val = pool3.eval(feed_dict={X: [testing_X[0]], y: [testing_Y[0]]}).shape
+    pool_val = pool.eval(feed_dict={X: [testing_X[0]], y: [testing_Y[0]]}).shape
 
     acc_val = accuracy.eval(feed_dict={X: [testing_X[0]], y: [testing_Y[0]]})
     rounded_val = rounded.eval(feed_dict={X: [testing_X[0]], y: [testing_Y[0]]})
@@ -182,7 +176,7 @@ with tf.Session() as sess:
     total_loss_val = total_loss.eval(feed_dict={X: [testing_X[0]], y: [testing_Y[0]]})
     
     print('conv1_val {}'.format(conv1_val))
-    print('pool3_val {}'.format(pool3_val))
+    print('pool_val {}'.format(pool_val))
     print('acc_val {}'.format(acc_val))
     print('rounded_val {}'.format(rounded_val))
     print('correct_val {}'.format(correct_val))
@@ -190,6 +184,8 @@ with tf.Session() as sess:
     print('logits_val {}'.format(logits_val))
     print('loss_val {}'.format(loss_val))
     print('total_loss_val {}'.format(total_loss_val))
+
+    start_time = datetime.now()
 
     acc_val = accuracy.eval(feed_dict={X: testing_X, y: testing_Y})
     print("pre-training testing accuracy: {:.4f}%".format(acc_val * 100))
@@ -233,5 +229,12 @@ with tf.Session() as sess:
                                         y: testing_Y})
     print("Final accuracy on test set:", acc_test)
     save_path = saver.save(sess, "./nn_erik_model/model")
+
+    end_time = datetime.now()
+    time_diff = end_time - start_time
+    time_per_epoch = time_diff / n_epochs
+
+    print("Total training time: {}".format(time_diff))
+    print("time per epoch: {}".format(time_per_epoch))
 
 file_write.close()
