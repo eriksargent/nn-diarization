@@ -65,7 +65,7 @@ def createIntervalList(results):
 reset_graph()
 
 model_path = os.path.join(os.path.dirname(
-    os.path.abspath(__file__)), 'nn_erik_model')
+    os.path.abspath(__file__)), 'model')
 
 with tf.Session() as sess:
     saver = tf.train.import_meta_graph(os.path.join(model_path, 'model.meta'))
@@ -87,10 +87,10 @@ with tf.Session() as sess:
             'eval/rounded:0', feed_dict={'inputs/X:0': ch2}).reshape([-1])
 
         # post processing
-        eliminateLessThanChunks(cnn_out_ch1, 0, 9)
-        eliminateLessThanChunks(cnn_out_ch1, 1, 5)
-        eliminateLessThanChunks(cnn_out_ch2, 0, 9)
-        eliminateLessThanChunks(cnn_out_ch2, 1, 5)
+        # eliminateLessThanChunks(cnn_out_ch1, 0, 9)
+        # eliminateLessThanChunks(cnn_out_ch1, 1, 5)
+        # eliminateLessThanChunks(cnn_out_ch2, 0, 9)
+        # eliminateLessThanChunks(cnn_out_ch2, 1, 5)
 
         xmax = len(cnn_out_ch1) * 0.05
 
