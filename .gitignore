@@ -1,3 +1,5 @@
 __pycache__
 .DS_Store
 *.npz
+tf_logs/*
+nn_erik_model/*
